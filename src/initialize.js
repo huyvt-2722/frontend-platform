@@ -60,7 +60,9 @@ import {
 } from './pubSub';
 // eslint-disable-next-line import/no-cycle
 import {
-  getConfig, mergeConfig,
+  getConfig,
+  setConfig,
+  mergeConfig,
 } from './config';
 import {
   configure as configureLogging, getLoggingService, NewRelicLoggingService, logError,
@@ -88,6 +90,7 @@ import {
   APP_ANALYTICS_INITIALIZED,
   APP_READY, APP_INIT_ERROR,
 } from './constants';
+import { getHttpConfig } from './initialize/data';
 import configureCache from './auth/LocalForageCache';
 
 /**
@@ -150,6 +153,30 @@ export async function auth(requireUser, hydrateUser) {
     // critical data is returned as part of fetch/ensureAuthenticatedUser above, and anything else
     // is a nice-to-have for application code.
     hydrateAuthenticatedUser();
+  }
+}
+
+export async function configTenant() {
+  try {
+    const tenant = window.location.hostname;
+    const data = await getHttpConfig(tenant);
+    if (document.querySelector('link[rel="shortcut icon"]') && data.common?.FAVICON_URL) {
+      document.querySelector('link[rel="shortcut icon"]').href = data.common.FAVICON_URL;
+    }
+    const mfeRef = window.location.pathname.split('/')[1];
+    const additionalConfig = data[mfeRef] ? data[mfeRef] : null;
+    mergeConfig({
+      BASE_URL: `${window.location.host}${mfeRef && ('/' + mfeRef)}`,
+      ...data?.common,
+      ...additionalConfig
+    })
+  } catch (e) {
+    // This is an option set some basic values an display the error page with the default message
+    // or we can redirect the user with history.goBack()
+    setConfig({
+      BASE_URL: `${window.location.host}`,
+      LANGUAGE_PREFERENCE_COOKIE_NAME: 'openedx-language-preference',
+    })
   }
 }
 
@@ -226,6 +253,7 @@ function applyOverrideHandlers(overrides) {
   const noOp = async () => { };
   return {
     pubSub: noOp,
+    configTenant,
     config: noOp,
     logging: noOp,
     auth,
@@ -303,7 +331,7 @@ export async function initialize({
     publish(APP_PUBSUB_INITIALIZED);
 
     // Configuration
-    await handlers.config();
+    getConfig().MULTITENANT_API ? await handlers.configTenant() : await handlers.config();
     await jsFileConfig();
     await runtimeConfig();
     publish(APP_CONFIG_INITIALIZED);

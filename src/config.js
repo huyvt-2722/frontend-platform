@@ -171,6 +171,7 @@ let config = {
   MFE_CONFIG_API_URL: process.env.MFE_CONFIG_API_URL,
   APP_ID: process.env.APP_ID,
   SUPPORT_URL: process.env.SUPPORT_URL,
+  MULTITENANT_API: true
 };
 
 /**
